@@ -27,7 +27,7 @@ Before writing any IRIS MDX, check these. Every one has caused silent wrong resu
 - [ ] **Use exact spec paths** — wrong hierarchy name returns null, no error: `[Outlet].[H1].[Region]` not `[Region].[Region]`
 - [ ] **NON EMPTY on every axis** — without it, all empty members are returned regardless of filter
 - [ ] **Side-by-side comparison** — put both members in a set `{.&[2023], .&[2024]}` on the axis; never two `%FILTER` on the same level
-- [ ] **Parent-level filter + child-level axis** — use `%FILTER`, not `WHERE`; `WHERE` collapses the dimension before axis evaluation → empty rows
+- [ ] **Side-by-side comparison multi-filter** — two `%FILTER` on the same level AND together → null data (not an error); use a set on the axis instead
 - [ ] **Member keys are not always captions** — integer-keyed dimensions need `&[2]` not `&[Online]`; discover with `CURRENTMEMBER.PROPERTIES("KEY")`
 - [ ] **`%MDX()` inside WITH MEMBER only** — placing it directly on an axis returns empty, no error
 - [ ] **`%COUNT` is the correct measure name** — never invent names like `Patient Count` or `Transaction Count`
@@ -103,24 +103,22 @@ FROM HoleFoods
 
 ## 4. %FILTER vs WHERE — Parent-Level Filter with Child-Level Axis
 
-`WHERE` with a parent-level member collapses the dimension before axis evaluation → empty rows.
-`%FILTER` applies after axis evaluation → preserves axis members.
+`WHERE` and `%FILTER` produce identical MDXText internally in IRIS — the engine rewrites both to the same `WHERE` clause. Both work correctly when filtering a parent level while showing child members on an axis.
 
 ```mdx
--- WRONG: WHERE collapses YearSold before MonthSold axis is evaluated → empty
+-- Both of these produce identical results in IRIS:
 SELECT {MEASURES.[Amount Sold]} ON 0,
        NON EMPTY [DateOfSale].[Actual].[MonthSold].MEMBERS ON 1
 FROM HoleFoods
 WHERE [DateOfSale].[Actual].[YearSold].&[2024]
 
--- CORRECT: %FILTER applies post-evaluation → only 2024 months with data
 SELECT {MEASURES.[Amount Sold]} ON 0,
        NON EMPTY [DateOfSale].[Actual].[MonthSold].MEMBERS ON 1
 FROM HoleFoods
 %FILTER [DateOfSale].[Actual].[YearSold].&[2024]
 ```
 
-**Rule:** when a dimension appears on an axis AND in a filter, use `%FILTER` — not `WHERE`.
+**Prefer `%FILTER`** for programmatic query building — easier to append conditions one at a time, and composes cleanly with `%OR`. Use `WHERE` for simple one-off filters in ad-hoc queries.
 
 Multiple `%FILTER` clauses chain as AND:
 ```mdx
@@ -139,7 +137,7 @@ FROM HoleFoods
 Two `%FILTER` clauses on the same dimension AND together. Year=2023 AND Year=2024 = always empty.
 
 ```mdx
--- WRONG: AND logic → always empty
+-- WRONG: AND logic → returns a row with empty member and null value
 SELECT {MEASURES.[Amount Sold]} ON 0,
        NON EMPTY [Product].[P1].[Product Category].MEMBERS ON 1
 FROM HoleFoods
@@ -358,11 +356,11 @@ Use **date-part** levels for grouping across all years (e.g., "all January month
 
 | Situation | Result | How to catch |
 |---|---|---|
-| Wrong hierarchy path | Null (`*`) everywhere, no error | Verify with `iris_info what=sa_schema` |
+| Wrong hierarchy path | Row with empty member and null value, no error | Verify with `iris_info what=sa_schema` |
 | Typo in dimension name | Dimension silently ignored | Check known totals against a control query |
 | Nonexistent member caption | Null (`*`), no error | Use `CURRENTMEMBER.PROPERTIES("KEY")` to discover real keys |
 | `%MDX()` directly on axis | Empty result, no error | Always wrap in `WITH MEMBER` |
-| Two `%FILTER` on same level | Always empty | Use set `{m1, m2}` on axis for OR/comparison |
+| Two `%FILTER` on same level | Empty member row with null value, no error | Use set `{m1, m2}` on axis for OR/comparison |
 | Integer-keyed dimension with caption key | Null, no error | Use numeric key `&[2]` not `&[Online]` |
 | Nonexistent measure | `ERROR #5001: Measure not found` | Check cube definition for exact name |
 | Nonexistent cube | `ERROR #5001: Cannot find Subject Area` | Check `iris_info what=sa_schema` |
