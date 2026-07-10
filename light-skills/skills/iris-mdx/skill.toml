@@ -1,0 +1,14 @@
+[skill]
+name = "asinay/iris-mdx"
+description = "Use when writing, debugging, or optimizing MDX queries against InterSystems IRIS BI cubes — engine choice (MDX vs SQL), hierarchy path syntax, NON EMPTY, %FILTER, %OR, calculated members, time series, and common traps. Load explicitly for MDX/BI work; do NOT load globally for general ObjectScript tasks."
+iris_version = ">=2024.1"
+tags = [
+    "iris",
+    "mdx",
+    "deepsee",
+    "analytics",
+    "bi",
+    "quirks",
+]
+author = "asinay"
+state = "draft"
